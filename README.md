@@ -1,5 +1,6 @@
 # Codewars_tasks
 I push here my Python solutions for tasks from Codewars (https://www.codewars.com/)
+My profile: https://www.codewars.com/users/Djet78
 
 Files contain: 
 - task description
