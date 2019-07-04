@@ -9,13 +9,14 @@ class AssemblerInterpreter:
     compared_vals = ()
     output = ''
 
-    func_parser_re = re.compile(r"""(?xs)                 # VERBOSE and DOTALL flags
-                                    (\w+?):               # Group 1: function (label) name
-                                    (?:(.+?ret))   # Group 2: function (label) body""")
+    func_parser_re = re.compile(r"""(?xsm)           # VERBOSE and DOTALL flags
+                                    (\w+?):          # Group 1: function (label) name
+                                    (.*?(?=^\s*$))   # Group 2: function (label) body""")
 
-    func_re = re.compile(r"""(?xs)                 # VERBOSE and DOTALL flags 
-                             (\w+:                 # function (label) name
-                             (?:.+?)(?=ret)ret)    # function (label) body""")
+
+    func_re = re.compile(r"""(?xs)                   # VERBOSE and DOTALL flags 
+                             (\w+:                   # function (label) name
+                             (?:.+?)(?=ret)ret)      # function (label) body""")
 
     comments_re = re.compile(r'(?m)(;.*)')
     main_workflow_re = re.compile(r'(?s)^(.*)(?=end)')
@@ -147,8 +148,6 @@ class AssemblerInterpreter:
 
         self.process_program()
 
-        print(self.program)
-        print(self.registers)
         if self.program[-1] == 'end':
             self.run_script()
         program_res = self.output
