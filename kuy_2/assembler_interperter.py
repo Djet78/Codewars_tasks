@@ -17,6 +17,8 @@ class AssemblerInterpreter:
     #                                 (.*?(?=^\s*$))           # Group 2: function (label) body
     #                                 """.format('|'.join(preserved_words)))
 
+    operands_re = re.compile(r"'.+?'|\w+")
+
     func_parser_re = re.compile(r"""(?xsm)           # VERBOSE and DOTALL flags
                                     (\w+?):          # Group 1: function (label) name
                                     (.*?(?=^\s*$))   # Group 2: function (label) body""")
@@ -55,7 +57,7 @@ class AssemblerInterpreter:
     def _process_instruction(self, line):
         instruction = line.split(maxsplit=1)
         if len(instruction) == 2:
-            operator, operands = instruction[0], instruction[1].split(', ')
+            operator, operands = instruction[0], self.operands_re.findall(instruction[1])
         else:
             operator, operands = instruction[0], []
         return operator, operands
@@ -150,6 +152,7 @@ class AssemblerInterpreter:
 
     def _remove_comments(self):
         self.program = self.comments_re.sub('', self.program)
+        print(self.program)
 
     def _load_functions(self):
         for func in self.func_parser_re.findall(self.program):
@@ -170,7 +173,6 @@ class AssemblerInterpreter:
         self._set_up(program)
 
         self._process_program()
-
         if self.program.pop() == 'end':
             self.run_script()
         program_res = self.output
@@ -191,37 +193,46 @@ class AssemblerInterpreter:
             getattr(AssemblerInterpreter, operator)(self, *operands)
 
 
-prog = '''
-mov   a, 8            ; value
-mov   b, 0            ; next
-mov   c, 0            ; counter
-mov   d, 0            ; first
-mov   e, 1            ; second
-call  proc_fib
-call  print
+prog1 = '''
+mov e, 14   ; instruction mov e, 14
+mov d, 6   ; instruction mov d, 6
+call func
+msg 'Random result: ', c
 end
 
-proc_fib:
-    cmp   c, 2
-    jl    func_0
-    mov   b, d
-    add   b, e
-    mov   d, e
-    mov   e, b
-    inc   c
-    cmp   c, a
-    jle   proc_fib
-    ret
-
-func_0:
-    mov   b, c
-    inc   c
-    jmp   proc_fib
-
-print:
-    msg   'Term ', a, ' of Fibonacci series is: ', b        ; output text
-    ret
+func:
+	cmp e, d
+	jl exit
+	mov c, e
+	mul c, d
+	ret
+; Do nothing
+exit:
+	msg 'Do nothing'
 '''
 
+prog2 = """
+mov u, 2   ; instruction mov u, 2
+mov b, 1   ; instruction mov b, 1
+call func
+msg 'Random result: ', q
+end
+
+func:
+	cmp u, b
+	jg exit
+	mov q, u
+	div q, b
+	ret
+; Do nothing
+exit:
+	msg 'Do nothing'
+
+"""
+
+
+
 assembler_interpreter = AssemblerInterpreter().exec
-print(assembler_interpreter(prog))
+print(assembler_interpreter(prog1))
+# print(assembler_interpreter(prog2))
+
