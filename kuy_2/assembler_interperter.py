@@ -8,7 +8,7 @@ class AssemblerInterpreter:
     compared_vals = ()
     output = ''
     depth = 0
-    stop_execution = False
+    stop_exec = False
 
     # preserved_words = ('inc', 'dec', 'add', 'sub', 'mul', 'div', 'jne', 'je', 'jge', 'jg', 'jle', 'jl',
     #                    'mov', 'call', 'cmp', 'jmp', 'msg', 'ret', 'end')
@@ -42,6 +42,7 @@ class AssemblerInterpreter:
         self.instruction_n = 0
         self.compared_vals = ()
         self.output = ''
+        self.depth = 0
 
     def _get_operand_num_value(self, x):
         if x.lstrip('-').isdigit():
@@ -52,10 +53,17 @@ class AssemblerInterpreter:
         return str(self.registers.get(x, x.strip("'")))
 
     def _process_instruction(self, line):
-        operator, operands = line.split(maxsplit=1)
-        operands = operands.split(', ')
+        instruction = line.split(maxsplit=1)
+        if len(instruction) == 2:
+            operator, operands = instruction[0], instruction[1].split(', ')
+        else:
+            operator, operands = instruction[0], []
         return operator, operands
 
+    def _is_stop_exec(self):
+        if not self.depth:
+            self.stop_exec = False
+        return self.stop_exec
     # ---------------------------------------
     # ----------- Math operators ------------
 
@@ -119,8 +127,8 @@ class AssemblerInterpreter:
 
         self.depth -= 1
 
-    def ret(self):
-        self.stop_execution = True
+    def ret(self, *args):
+        self.stop_exec = True
 
     def cmp(self, x, y):
         self.compared_vals = (self._get_operand_num_value(x), self._get_operand_num_value(y))
@@ -134,22 +142,22 @@ class AssemblerInterpreter:
     # ---------------------------------------
     # -------- Program preprocessing --------
 
-    def process_program(self):
-        self.remove_comments()
-        self.load_functions()
-        self.remove_function_declarations()
+    def _process_program(self):
+        self._remove_comments()
+        self._load_functions()
+        self._remove_function_declarations()
         self.program = self.get_instructions_list(self.program)
 
-    def remove_comments(self):
+    def _remove_comments(self):
         self.program = self.comments_re.sub('', self.program)
 
-    def load_functions(self):
+    def _load_functions(self):
         for func in self.func_parser_re.findall(self.program):
             func_name = func[0]
             func_body = func[1]
             self.registers[func_name] = self.get_instructions_list(func_body)
 
-    def remove_function_declarations(self):
+    def _remove_function_declarations(self):
         self.program = self.func_re.sub('', self.program)
 
     def get_instructions_list(self, program):
@@ -158,10 +166,10 @@ class AssemblerInterpreter:
     # ---------------------------------------
     # ---------------- Main -----------------
 
-    def run(self, program):
+    def exec(self, program):
         self._set_up(program)
 
-        self.process_program()
+        self._process_program()
 
         if self.program.pop() == 'end':
             self.run_script()
@@ -176,14 +184,7 @@ class AssemblerInterpreter:
 
         for instruction in program:
 
-            if self.stop_execution:
-                if not self.depth:
-                    self.stop_execution = False
-                if self.stop_execution:
-                    break
-
-            if instruction == 'ret':
-                self.ret()
+            if self._is_stop_exec():
                 break
 
             operator, operands = self._process_instruction(instruction)
@@ -222,5 +223,5 @@ print:
     ret
 '''
 
-assembler_interpreter = AssemblerInterpreter().run
+assembler_interpreter = AssemblerInterpreter().exec
 print(assembler_interpreter(prog))
