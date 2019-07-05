@@ -5,9 +5,17 @@ class AssemblerInterpreter:
 
     program = ''
     registers = {}
-    instruction_n = 0
     compared_vals = ()
     output = ''
+    depth = 0
+    stop_execution = False
+
+    # preserved_words = ('inc', 'dec', 'add', 'sub', 'mul', 'div', 'jne', 'je', 'jge', 'jg', 'jle', 'jl',
+    #                    'mov', 'call', 'cmp', 'jmp', 'msg', 'ret', 'end')
+    # func_parser_re = re.compile(r"""(?xsm)                   # VERBOSE and DOTALL flags
+    #                                 (^\w+?)(?<!{}):          # Group 1: function (label) name
+    #                                 (.*?(?=^\s*$))           # Group 2: function (label) body
+    #                                 """.format('|'.join(preserved_words)))
 
     func_parser_re = re.compile(r"""(?xsm)           # VERBOSE and DOTALL flags
                                     (\w+?):          # Group 1: function (label) name
@@ -105,7 +113,14 @@ class AssemblerInterpreter:
     def call(self, lbl):
         program = self.registers[lbl]
 
+        self.depth += 1
+
         self.run_script(program)
+
+        self.depth -= 1
+
+    def ret(self):
+        self.stop_execution = True
 
     def cmp(self, x, y):
         self.compared_vals = (self._get_operand_num_value(x), self._get_operand_num_value(y))
@@ -148,7 +163,7 @@ class AssemblerInterpreter:
 
         self.process_program()
 
-        if self.program[-1] == 'end':
+        if self.program.pop() == 'end':
             self.run_script()
         program_res = self.output
 
@@ -159,7 +174,18 @@ class AssemblerInterpreter:
     def run_script(self, program=None):
         program = program or self.program
 
-        for instruction in program[:-1]:
+        for instruction in program:
+
+            if self.stop_execution:
+                if not self.depth:
+                    self.stop_execution = False
+                if self.stop_execution:
+                    break
+
+            if instruction == 'ret':
+                self.ret()
+                break
+
             operator, operands = self._process_instruction(instruction)
             getattr(AssemblerInterpreter, operator)(self, *operands)
 
