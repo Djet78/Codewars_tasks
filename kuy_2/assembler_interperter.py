@@ -1,6 +1,10 @@
 import re
 
 
+class BadScriptError(Exception):
+    pass
+
+
 class AssemblerInterpreter:
 
     program = ''
@@ -10,23 +14,16 @@ class AssemblerInterpreter:
     depth = 0
     stop_exec = False
 
-    # preserved_words = ('inc', 'dec', 'add', 'sub', 'mul', 'div', 'jne', 'je', 'jge', 'jg', 'jle', 'jl',
-    #                    'mov', 'call', 'cmp', 'jmp', 'msg', 'ret', 'end')
-    # func_parser_re = re.compile(r"""(?xsm)                   # VERBOSE and DOTALL flags
-    #                                 (^\w+?)(?<!{}):          # Group 1: function (label) name
-    #                                 (.*?(?=^\s*$))           # Group 2: function (label) body
-    #                                 """.format('|'.join(preserved_words)))
-
     operands_re = re.compile(r"'.+?'|\w+")
 
     func_parser_re = re.compile(r"""(?xsm)           # VERBOSE and DOTALL flags
-                                    (\w+?):          # Group 1: function (label) name
+                                    (^\w+?):         # Group 1: function (label) name
                                     (.*?(?=^\s*$))   # Group 2: function (label) body""")
 
 
-    func_re = re.compile(r"""(?xs)                   # VERBOSE and DOTALL flags 
-                             (\w+:                   # function (label) name
-                             (?:.+?)(?=ret)ret)      # function (label) body""")
+    func_re = re.compile(r"""(?xsm)                  # VERBOSE and DOTALL flags 
+                             (^\w+?:                 # function (label) name
+                             .*?(?=^\s*$))           # function (label) body""")
 
     comments_re = re.compile(r'(?m)(;.*)')
     main_workflow_re = re.compile(r'(?s)^(.*)(?=end)')
@@ -66,6 +63,13 @@ class AssemblerInterpreter:
         if not self.depth:
             self.stop_exec = False
         return self.stop_exec
+
+    def _validate_script(self, program):
+        required_last_instructions = ('ret', 'end', 'jmp', 'jne', 'je', 'jge', 'jq', 'jle', 'jl', 'call')
+        last_instruction = program[-1].split(maxsplit=1)[0]
+        if last_instruction not in required_last_instructions:
+            raise BadScriptError('Bad script!')
+
     # ---------------------------------------
     # ----------- Math operators ------------
 
@@ -132,6 +136,9 @@ class AssemblerInterpreter:
     def ret(self, *args):
         self.stop_exec = True
 
+    def end(self, *args):
+        pass
+
     def cmp(self, x, y):
         self.compared_vals = (self._get_operand_num_value(x), self._get_operand_num_value(y))
 
@@ -152,7 +159,6 @@ class AssemblerInterpreter:
 
     def _remove_comments(self):
         self.program = self.comments_re.sub('', self.program)
-        print(self.program)
 
     def _load_functions(self):
         for func in self.func_parser_re.findall(self.program):
@@ -173,8 +179,13 @@ class AssemblerInterpreter:
         self._set_up(program)
 
         self._process_program()
-        if self.program.pop() == 'end':
+
+        try:
             self.run_script()
+        except BadScriptError:
+            self._tear_down()
+            return -1
+
         program_res = self.output
 
         self._tear_down()
@@ -183,6 +194,8 @@ class AssemblerInterpreter:
 
     def run_script(self, program=None):
         program = program or self.program
+
+        self._validate_script(program)
 
         for instruction in program:
 
@@ -194,45 +207,28 @@ class AssemblerInterpreter:
 
 
 prog1 = '''
-mov e, 14   ; instruction mov e, 14
-mov d, 6   ; instruction mov d, 6
-call func
-msg 'Random result: ', c
+mov   a, 2            ; value1
+mov   b, 10           ; value2
+mov   c, a            ; temp1
+mov   d, b            ; temp2
+call  proc_func
+call  print
 end
 
-func:
-	cmp e, d
-	jl exit
-	mov c, e
-	mul c, d
-	ret
-; Do nothing
-exit:
-	msg 'Do nothing'
+proc_func:
+    cmp   d, 1
+    je    continue
+    mul   c, a
+    dec   d
+    call  proc_func
+
+continue:
+    ret
+
+print:
+    msg a, '^', b, ' = ', c
+    ret
 '''
-
-prog2 = """
-mov u, 2   ; instruction mov u, 2
-mov b, 1   ; instruction mov b, 1
-call func
-msg 'Random result: ', q
-end
-
-func:
-	cmp u, b
-	jg exit
-	mov q, u
-	div q, b
-	ret
-; Do nothing
-exit:
-	msg 'Do nothing'
-
-"""
-
-
 
 assembler_interpreter = AssemblerInterpreter().exec
 print(assembler_interpreter(prog1))
-# print(assembler_interpreter(prog2))
-
