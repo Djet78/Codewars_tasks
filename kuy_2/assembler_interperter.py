@@ -7,19 +7,17 @@ class BadScriptError(Exception):
 
 class AssemblerInterpreter:
 
-    operands_re = re.compile(r"'.+?'|\w+")
-
-    func_parser_re = re.compile(r"""(?xsm)           # VERBOSE and DOTALL flags
-                                    (^\w+?):         # Group 1: function (label) name
-                                    (.*?(?=^\s*$))   # Group 2: function (label) body""")
-
-
-    func_re = re.compile(r"""(?xsm)                  # VERBOSE and DOTALL flags 
-                             (^\w+?:                 # function (label) name
-                             .*?(?=^\s*$))           # function (label) body""")
-
     comments_re = re.compile(r'(?m)(;.*)')
-    main_workflow_re = re.compile(r'(?s)^(.*)(?=end)')
+
+    func_def_re = re.compile(r"""(?xsm)            # Matches function name and body
+                                  (^\w+?):         # Group 1: function (label) name
+                                  (.*?(?=^\s*$))   # Group 2: function (label) body""")
+
+    func_re = re.compile(r"""(?xsm)                # Match whole func def
+                             (^\w+?:               # function (label) name
+                             .*?(?=^\s*$))         # function (label) body""")
+
+    operands_re = re.compile(r"'.+?'|\w+")
 
     def __init__(self, program):
         self.program = program
@@ -44,25 +42,6 @@ class AssemblerInterpreter:
     def _get_operands(self, line):
         return self.operands_re.findall(line)
 
-    def _process_instruction(self, line):
-        instruction = line.split(maxsplit=1)
-        if len(instruction) == 2:
-            operator, operands = instruction[0], self._get_operands(instruction[1])
-        else:
-            operator, operands = instruction[0], []
-        return operator, operands
-
-    def _is_stop_exec(self):
-        if self.depth == 0:
-            self.stop_exec = False
-        return self.stop_exec
-
-    def _validate_script(self, program):
-        required_last_instructions = ('ret', 'end', 'jmp', 'jne', 'je', 'jge', 'jq', 'jle', 'jl', 'call')
-        last_instruction = program[-1].split(maxsplit=1)[0]
-        if last_instruction not in required_last_instructions:
-            raise BadScriptError('Bad script!')
-
     # ---------------------------------------
     # -------- Program preprocessing --------
 
@@ -76,7 +55,7 @@ class AssemblerInterpreter:
         self.program = self.comments_re.sub('', self.program)
 
     def _load_functions(self):
-        for func_name, func_body in self.func_parser_re.findall(self.program):
+        for func_name, func_body in self.func_def_re.findall(self.program):
             self.registers[func_name] = self.get_instructions_list(func_body)
 
     def _remove_function_declarations(self):
@@ -84,6 +63,23 @@ class AssemblerInterpreter:
 
     def get_instructions_list(self, program):
         return [line.strip() for line in program.splitlines() if line.strip()]
+
+    # ---------------------------------------
+    # ---------- Program processing ---------
+
+    def _process_instruction(self, line):
+        instruction = line.split(maxsplit=1)
+        if len(instruction) == 2:
+            operator, operands = instruction[0], self._get_operands(instruction[1])
+        else:
+            operator, operands = instruction[0], []
+        return operator, operands
+
+    def _validate_script(self, program):
+        required_last_instructions = ('ret', 'end', 'jmp', 'jne', 'je', 'jge', 'jq', 'jle', 'jl', 'call')
+        last_instruction = program[-1].split(maxsplit=1)[0]
+        if last_instruction not in required_last_instructions:
+            raise BadScriptError('Bad script!')
 
     # ---------------------------------------
     # ----------- Math operators ------------
@@ -136,8 +132,8 @@ class AssemblerInterpreter:
     # ---------------------------------------
     # ----------- Other operators -----------
 
-    def mov(self, x, y):
-        self.registers[x] = self._get_operand_num_value(y)
+    def cmp(self, x, y):
+        self.compared_vals = (self._get_operand_num_value(x), self._get_operand_num_value(y))
 
     def call(self, lbl):
         program = self.registers[lbl]
@@ -148,26 +144,32 @@ class AssemblerInterpreter:
 
         self.depth -= 1
 
-    def ret(self, *args):
-        self.stop_exec = True
-
     def end(self, *args):
+        """ For compatibility with other method calls """
         pass
-
-    def cmp(self, x, y):
-        self.compared_vals = (self._get_operand_num_value(x), self._get_operand_num_value(y))
 
     def jmp(self, lbl):
         self.call(lbl)
 
+    def mov(self, x, y):
+        self.registers[x] = self._get_operand_num_value(y)
+
     def msg(self, *args):
         self.output = ''.join(self._get_operand_str_value(arg) for arg in args)
 
+    def ret(self, *args):
+        self.stop_exec = True
+
     # ---------------------------------------
-    # ---------------- Main -----------------
+    # -------------- Executors --------------
+
+    def _is_stop_exec(self):
+        if self.depth == 0:
+            self.stop_exec = False
+        return self.stop_exec
 
     def exec(self):
-
+        """ Entry point for whole script execution """
         self._process_program()
 
         try:
@@ -175,9 +177,7 @@ class AssemblerInterpreter:
         except BadScriptError:
             return -1
 
-        program_res = self.output
-
-        return program_res or -1
+        return self.output
 
     def run_script(self, program=None):
         program = program or self.program
@@ -191,6 +191,12 @@ class AssemblerInterpreter:
 
             operator, operands = self._process_instruction(instruction)
             getattr(AssemblerInterpreter, operator)(self, *operands)
+
+
+def assembler_interpreter(program):
+    interpreter = AssemblerInterpreter(program)
+    res = interpreter.exec()
+    return res
 
 
 prog1 = '''
@@ -216,12 +222,3 @@ print:
     msg a, '^', b, ' = ', c
     ret
 '''
-
-
-def assembler_interpreter(program):
-    interpreter = AssemblerInterpreter(program)
-    res = interpreter.exec()
-    return res
-
-
-print(assembler_interpreter(prog1))
