@@ -51,16 +51,19 @@ class AssemblerInterpreter:
     def _get_operand_str_value(self, x):
         return str(self.registers.get(x, x.strip("'")))
 
+    def _get_operands(self, line):
+        return self.operands_re.findall(line)
+
     def _process_instruction(self, line):
         instruction = line.split(maxsplit=1)
         if len(instruction) == 2:
-            operator, operands = instruction[0], self.operands_re.findall(instruction[1])
+            operator, operands = instruction[0], self._get_operands(instruction[1])
         else:
             operator, operands = instruction[0], []
         return operator, operands
 
     def _is_stop_exec(self):
-        if not self.depth:
+        if self.depth == 0:
             self.stop_exec = False
         return self.stop_exec
 
@@ -69,6 +72,30 @@ class AssemblerInterpreter:
         last_instruction = program[-1].split(maxsplit=1)[0]
         if last_instruction not in required_last_instructions:
             raise BadScriptError('Bad script!')
+
+    # ---------------------------------------
+    # -------- Program preprocessing --------
+
+    def _process_program(self):
+        self._remove_comments()
+        self._load_functions()
+        self._remove_function_declarations()
+        self.program = self.get_instructions_list(self.program)
+
+    def _remove_comments(self):
+        self.program = self.comments_re.sub('', self.program)
+
+    def _load_functions(self):
+        for func in self.func_parser_re.findall(self.program):
+            func_name = func[0]
+            func_body = func[1]
+            self.registers[func_name] = self.get_instructions_list(func_body)
+
+    def _remove_function_declarations(self):
+        self.program = self.func_re.sub('', self.program)
+
+    def get_instructions_list(self, program):
+        return [line.strip() for line in program.splitlines() if line.strip()]
 
     # ---------------------------------------
     # ----------- Math operators ------------
@@ -92,7 +119,7 @@ class AssemblerInterpreter:
         self.registers[x] //= self._get_operand_num_value(y)
 
     # ---------------------------------------
-    # ------- Conditional operators ---------
+    # --------- Conditional calls -----------
 
     def jne(self, lbl):
         if self.compared_vals[0] != self.compared_vals[1]:
@@ -147,30 +174,6 @@ class AssemblerInterpreter:
 
     def msg(self, *args):
         self.output = ''.join(self._get_operand_str_value(arg) for arg in args)
-
-    # ---------------------------------------
-    # -------- Program preprocessing --------
-
-    def _process_program(self):
-        self._remove_comments()
-        self._load_functions()
-        self._remove_function_declarations()
-        self.program = self.get_instructions_list(self.program)
-
-    def _remove_comments(self):
-        self.program = self.comments_re.sub('', self.program)
-
-    def _load_functions(self):
-        for func in self.func_parser_re.findall(self.program):
-            func_name = func[0]
-            func_body = func[1]
-            self.registers[func_name] = self.get_instructions_list(func_body)
-
-    def _remove_function_declarations(self):
-        self.program = self.func_re.sub('', self.program)
-
-    def get_instructions_list(self, program):
-        return [line.strip() for line in program.splitlines() if line.strip()]
 
     # ---------------------------------------
     # ---------------- Main -----------------
