@@ -7,13 +7,6 @@ class BadScriptError(Exception):
 
 class AssemblerInterpreter:
 
-    program = ''
-    registers = {}
-    compared_vals = ()
-    output = ''
-    depth = 0
-    stop_exec = False
-
     operands_re = re.compile(r"'.+?'|\w+")
 
     func_parser_re = re.compile(r"""(?xsm)           # VERBOSE and DOTALL flags
@@ -28,20 +21,17 @@ class AssemblerInterpreter:
     comments_re = re.compile(r'(?m)(;.*)')
     main_workflow_re = re.compile(r'(?s)^(.*)(?=end)')
 
-    # ---------------------------------------
-    # ---------- Helper functions -----------
-    # ---------------------------------------
-
-    def _set_up(self, program):
+    def __init__(self, program):
         self.program = program
-
-    def _tear_down(self):
-        self.program = ''
         self.registers = {}
-        self.instruction_n = 0
         self.compared_vals = ()
         self.output = ''
         self.depth = 0
+        self.stop_exec = False
+
+    # ---------------------------------------
+    # ---------- Helper functions -----------
+    # ---------------------------------------
 
     def _get_operand_num_value(self, x):
         if x.lstrip('-').isdigit():
@@ -86,9 +76,7 @@ class AssemblerInterpreter:
         self.program = self.comments_re.sub('', self.program)
 
     def _load_functions(self):
-        for func in self.func_parser_re.findall(self.program):
-            func_name = func[0]
-            func_body = func[1]
+        for func_name, func_body in self.func_parser_re.findall(self.program):
             self.registers[func_name] = self.get_instructions_list(func_body)
 
     def _remove_function_declarations(self):
@@ -178,20 +166,16 @@ class AssemblerInterpreter:
     # ---------------------------------------
     # ---------------- Main -----------------
 
-    def exec(self, program):
-        self._set_up(program)
+    def exec(self):
 
         self._process_program()
 
         try:
             self.run_script()
         except BadScriptError:
-            self._tear_down()
             return -1
 
         program_res = self.output
-
-        self._tear_down()
 
         return program_res or -1
 
@@ -233,5 +217,11 @@ print:
     ret
 '''
 
-assembler_interpreter = AssemblerInterpreter().exec
+
+def assembler_interpreter(program):
+    interpreter = AssemblerInterpreter(program)
+    res = interpreter.exec()
+    return res
+
+
 print(assembler_interpreter(prog1))
